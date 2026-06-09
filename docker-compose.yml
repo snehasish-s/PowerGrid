@@ -1,0 +1,95 @@
+# ============================================================
+# PowerPulse AI — Docker Compose Configuration
+# TPCODL Smart Utility Asset Intelligence Platform
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ---- MySQL 8.0 Database ----
+  mysql-db:
+    image: mysql:8.0
+    container_name: powerpulse-mysql
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - powerpulse-network
+
+  # ---- Spring Boot 3 Backend ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: powerpulse-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
+      ML_SERVICE_URL: ${ML_SERVICE_URL}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - powerpulse-network
+
+  # ---- React Frontend (Nginx) ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    container_name: powerpulse-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - powerpulse-network
+
+  # ---- Python ML Service (FastAPI) ----
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    container_name: powerpulse-ml
+    restart: unless-stopped
+    ports:
+      - "${ML_SERVICE_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql-db:3306/${MYSQL_DATABASE}
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - powerpulse-network
+
+volumes:
+  mysql-data:
+    driver: local
+
+networks:
+  powerpulse-network:
+    driver: bridge

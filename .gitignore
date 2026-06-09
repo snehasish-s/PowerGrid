@@ -1,0 +1,39 @@
+# ============================================================
+# PowerPulse AI — Git Ignore Rules
+# ============================================================
+
+# ---- Java / Maven ----
+backend/target/
+*.class
+*.jar
+*.war
+*.log
+*.iml
+
+# ---- Node / React ----
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# ---- Python ----
+ml-service/__pycache__/
+ml-service/*.pyc
+ml-service/.venv/
+ml-service/venv/
+ml-service/*.egg-info/
+
+# ---- Environment ----
+.env
+.env.local
+.env.production
+
+# ---- Docker ----
+mysql-data/
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
