@@ -11,6 +11,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
@@ -57,11 +58,11 @@ public class JwtTokenProvider {
      * Extract username (subject) from JWT token.
      */
     public String getUsernameFromToken(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
                 .build()
-                .parseSignedClaims(token)
-                .getPayload()
+                .parseClaimsJws(token)
+                .getBody()
                 .getSubject();
     }
 
@@ -70,21 +71,14 @@ public class JwtTokenProvider {
      */
     public boolean validateToken(String token) {
         try {
-            Jwts.parser()
-                .verifyWith(getSigningKey())
+            Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
                 .build()
-                .parseSignedClaims(token);
+                .parseClaimsJws(token);
             return true;
-        } catch (SecurityException e) {
-            logger.error("Invalid JWT signature: {}", e.getMessage());
-        } catch (MalformedJwtException e) {
-            logger.error("Malformed JWT token: {}", e.getMessage());
-        } catch (ExpiredJwtException e) {
-            logger.error("Expired JWT token: {}", e.getMessage());
-        } catch (UnsupportedJwtException e) {
-            logger.error("Unsupported JWT token: {}", e.getMessage());
-        } catch (IllegalArgumentException e) {
-            logger.error("JWT claims string is empty: {}", e.getMessage());
+        } catch (SecurityException | MalformedJwtException | ExpiredJwtException |
+                 UnsupportedJwtException | IllegalArgumentException e) {
+            logger.error("Invalid JWT token: {}", e.getMessage());
         }
         return false;
     }
@@ -93,7 +87,12 @@ public class JwtTokenProvider {
      * Derive HMAC-SHA signing key from the Base64-encoded secret.
      */
     private SecretKey getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(jwtSecret);
+        } catch (IllegalArgumentException e) {
+            keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        }
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }

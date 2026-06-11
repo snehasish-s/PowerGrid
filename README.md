@@ -89,4 +89,9 @@ TPCODL_Project/
 
 ---
 
-*Built for TPCODL Internship 2026 | PowerPulse AI v1.0*
+
+
+
+
+
+*Built for TPCODL Internship 2024 | PowerPulse AI v1.0*

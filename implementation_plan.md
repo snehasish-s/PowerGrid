@@ -1,266 +1,144 @@
-# PowerPulse AI — Phase 1 Implementation Plan
+# PowerPulse AI — Final Phase Implementation Plan
 
-## Overview
+Provide a comprehensive solution to complete all remaining features of the **PowerPulse AI** platform. The final steps will implement the missing frontend user interfaces for **Inventory Management** and **Outage Monitoring**, connect them to their existing backend REST endpoints, integrate them into the global layout (Sidebar and Router), and verify the database configuration.
 
-Build the complete foundation of **PowerPulse AI**, a Smart Utility Asset Intelligence Platform for TPCODL (Tata Power Central Odisha Distribution Limited). Phase 1 delivers:
-
-- Full Spring Boot 3 backend with JPA entities, JWT auth, and role-based security
-- React frontend with the **Tata Power Dark Grid** design system — animated, deployment-ready
-- Python ML service skeleton with FastAPI
-- Docker + docker-compose for one-command deployment
+## User Review Required
 
 > [!IMPORTANT]
-> **Design System**: All UI follows the "Tata Power Dark Grid" — dark surfaces (#121212/#0B0F0D), electric green accent (#03FFAB), Syne + Outfit typography, angular shapes, minimal shadows, generous spacing. No glassmorphism, no pill buttons, no bubbly cards.
+> **Database Environment**:
+> 1. By default, the application runs using **Docker Compose** which spins up a dedicated MySQL container (`powerpulse-mysql`) using credentials from `.env` (`powerpulse_admin` / `TpCoDL@2026!`).
+> 2. If you intend to run the backend *locally outside Docker* (via `mvn spring-boot:run`), please ensure you have a running MySQL server on localhost port 3306, with a database named `powerpulse_db`, and that your MySQL credentials match those in `.env` and `application.properties`. If they differ, please provide them so we can update the config.
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Role Access Clarification**:
+> - Currently, we propose that **Inventory Management** is accessible to `['ADMIN', 'MAINTENANCE_MANAGER']` roles.
+> - **Outage Monitoring** is proposed to be visible/editable for `['ADMIN', 'FIELD_ENGINEER', 'MAINTENANCE_MANAGER', 'EXECUTIVE']` roles.
+> Let us know if you want to restrict or expand these role policies.
 
 ---
 
 ## Proposed Changes
 
-### 1. Spring Boot Backend (`/backend`)
+### 1. React Frontend Pages & Components (`/frontend`)
 
-#### [NEW] Project Structure
+#### [NEW] [InventoryPage.jsx](file:///d:/TPCODL_Project/frontend/src/pages/InventoryPage.jsx)
+- Create a complete Inventory Management dashboard interface styled with the **Tata Power Dark Grid** design system.
+- Features:
+  - Table listing inventory items: Item Code, Name, Category, Quantity, Unit, Reorder Level, Unit Price, Warehouse, Supplier, and Stock Status.
+  - Low-stock badge notifications with electric red text/borders when `quantity <= reorderLevel`.
+  - Search bar by Item Name or Code.
+  - Filters for Category (e.g., Transformer Parts, Cables, Metering) and Warehouse.
+  - "Add Item" / "Edit Item" modal form linked to `POST /api/inventory` and `PUT /api/inventory/{id}`.
+  - "Delete Item" button linked to `DELETE /api/inventory/{id}`.
+  - Fallback mockup data in case the backend server is offline during load.
 
-```
-backend/
-├── pom.xml
-├── Dockerfile
-├── src/main/java/com/tpcodl/powerpulse/
-│   ├── PowerPulseApplication.java
-│   ├── config/
-│   │   ├── SecurityConfig.java          # Spring Security filter chain, role-based access
-│   │   ├── JwtAuthenticationFilter.java # OncePerRequestFilter for JWT validation
-│   │   ├── JwtTokenProvider.java        # JWT token generation + validation
-│   │   ├── CorsConfig.java             # CORS for React frontend
-│   │   └── AppConfig.java              # Password encoder, RestTemplate beans
-│   ├── entity/
-│   │   ├── User.java                   # id, username, email, password, role, fullName, phone, zone
-│   │   ├── Asset.java                  # assetId (TR-1001), type, location, lat/lng, status, zone
-│   │   ├── Fault.java                  # faultId, asset FK, severity, type, reportedBy, resolvedAt
-│   │   ├── Maintenance.java            # maintenanceId, asset FK, type (preventive/corrective), scheduledDate
-│   │   ├── Inspection.java             # inspectionId, asset FK, inspector FK, findings, score
-│   │   ├── Prediction.java             # predictionId, asset FK, failureProbability, predictedDate, model
-│   │   ├── Inventory.java              # inventoryId, itemName, category, quantity, warehouse, reorderLevel
-│   │   └── Outage.java                 # outageId, zone, affectedCustomers, startTime, endTime, cause
-│   ├── enums/
-│   │   ├── Role.java                   # ADMIN, FIELD_ENGINEER, MAINTENANCE_MANAGER, EXECUTIVE
-│   │   ├── AssetType.java              # TRANSFORMER, FEEDER, POLE, METER, SWITCHGEAR, CABLE
-│   │   ├── AssetStatus.java            # OPERATIONAL, DEGRADED, FAULTY, DECOMMISSIONED
-│   │   ├── FaultSeverity.java          # LOW, MEDIUM, HIGH, CRITICAL
-│   │   ├── MaintenanceType.java        # PREVENTIVE, CORRECTIVE, EMERGENCY, PREDICTIVE
-│   │   └── MaintenanceStatus.java      # SCHEDULED, IN_PROGRESS, COMPLETED, OVERDUE
-│   ├── repository/                     # JpaRepository interfaces for each entity
-│   ├── dto/
-│   │   ├── LoginRequest.java
-│   │   ├── LoginResponse.java
-│   │   ├── RegisterRequest.java
-│   │   └── ApiResponse.java
-│   ├── service/
-│   │   └── CustomUserDetailsService.java  # UserDetailsService implementation
-│   └── exception/
-│       ├── GlobalExceptionHandler.java
-│       └── ResourceNotFoundException.java
-├── src/main/resources/
-│   ├── application.properties          # MySQL, JWT, FastAPI config
-│   └── schema.sql                      # Complete CREATE TABLE statements
-└── src/test/java/com/tpcodl/powerpulse/
-    └── PowerPulseApplicationTests.java
-```
+#### [NEW] [OutagesPage.jsx](file:///d:/TPCODL_Project/frontend/src/pages/OutagesPage.jsx)
+- Create an Outage Tracking dashboard page matching the Dark Grid design.
+- Features:
+  - Table of active and historical outages showing: Outage ID, Zone, Affected Area, Affected Customers, Start/End times, Cause, Outage Type, and Status.
+  - Status badges: `ACTIVE` (electric red pulse/glow) vs `RESOLVED` (mint green).
+  - Search and filter controls by Zone (Bhubaneswar, Cuttack, Cuttack, etc.) and Status.
+  - "Log Outage" modal form to report new grid outages, connected to `POST /api/outages`.
+  - "Resolve Outage" action button that opens a modal to specify `endTime` and `restorationNotes`, connected to `PUT /api/outages/{id}`.
+  - Fallback mockup data matching the backend's sample seed.
 
-#### Entity Relationships
+#### [MODIFY] [App.jsx](file:///d:/TPCODL_Project/frontend/src/App.jsx)
+- Import `InventoryPage` and `OutagesPage`.
+- Define new routes in the `Routes` component:
+  - `/inventory` inside `ProtectedRoute` allowing `['ADMIN', 'MAINTENANCE_MANAGER']`
+  - `/outages` inside `ProtectedRoute` allowing all authenticated roles
 
-```mermaid
-erDiagram
-    USER ||--o{ FAULT : "reports"
-    USER ||--o{ INSPECTION : "inspects"
-    USER ||--o{ MAINTENANCE : "assigned_to"
-    ASSET ||--o{ FAULT : "has"
-    ASSET ||--o{ MAINTENANCE : "requires"
-    ASSET ||--o{ INSPECTION : "undergoes"
-    ASSET ||--o{ PREDICTION : "predicted_for"
-    ASSET ||--o{ OUTAGE : "causes"
-```
-
-#### Key Design Decisions (Backend)
-
-- **Asset IDs**: String format — `TR-1001` (transformer), `FD-2003` (feeder), `PL-3045` (pole)
-- **Zones**: TPCODL Odisha zones — Bhubaneswar, Cuttack, Berhampur, Sambalpur, Rourkela, Balasore
-- **Audit fields**: All entities have `createdAt`, `updatedAt` with `@CreatedDate`
-- **Soft delete**: `isActive` flag on Asset and User — no hard deletes
-- **Coordinates**: `latitude`/`longitude` as `Double` for Leaflet map integration
-
----
-
-### 2. React Frontend (`/frontend`)
-
-#### [NEW] Project Structure (Vite + React + TailwindCSS)
-
-```
-frontend/
-├── Dockerfile
-├── nginx.conf                    # Production Nginx config
-├── package.json
-├── tailwind.config.js            # Tata Power Dark Grid design tokens
-├── vite.config.js
-├── index.html
-├── public/
-│   └── favicon.svg
-└── src/
-    ├── main.jsx
-    ├── App.jsx                   # Router setup with animated transitions
-    ├── index.css                 # Global styles, @font-face, animations
-    ├── assets/                   # Static images (reference photos)
-    ├── components/
-    │   ├── layout/
-    │   │   ├── Sidebar.jsx       # Animated sidebar with role-based nav
-    │   │   ├── Header.jsx        # Top bar with notifications, user avatar
-    │   │   └── DashboardLayout.jsx
-    │   ├── ui/
-    │   │   ├── Button.jsx        # Matches design.md button specs
-    │   │   ├── Card.jsx          # Dark bordered cards, 8px radius
-    │   │   ├── Input.jsx         # Dark surface, square-edged
-    │   │   ├── Badge.jsx         # Status chips with accent colors
-    │   │   ├── LoadingSpinner.jsx # Animated electric pulse loader
-    │   │   ├── AnimatedCounter.jsx # Count-up animation for stats
-    │   │   └── GlowEffect.jsx     # Subtle electric green glow
-    │   ├── charts/
-    │   │   ├── AssetHealthChart.jsx    # Doughnut chart — asset status
-    │   │   ├── FaultTrendChart.jsx     # Line chart — faults over time
-    │   │   ├── MaintenanceBarChart.jsx # Bar chart — maintenance by type
-    │   │   └── OutageTimeline.jsx      # Timeline visualization
-    │   └── maps/
-    │       └── AssetMap.jsx       # Leaflet map with custom dark tiles + markers
-    ├── pages/
-    │   ├── LoginPage.jsx          # Full-screen dark login with animations
-    │   ├── DashboardPage.jsx      # KPI cards, charts, map, activity feed
-    │   ├── AssetsPage.jsx         # Asset table with filters and search
-    │   ├── FaultsPage.jsx         # Fault log with severity badges
-    │   ├── MaintenancePage.jsx    # Maintenance scheduler
-    │   ├── MapViewPage.jsx        # Full-screen Leaflet map
-    │   ├── PredictionsPage.jsx    # ML predictions dashboard
-    │   └── NotFoundPage.jsx       # Animated 404
-    ├── hooks/
-    │   ├── useAuth.js             # JWT auth context hook
-    │   └── useApi.js              # Axios wrapper with interceptors
-    ├── context/
-    │   └── AuthContext.jsx        # Auth state management
-    ├── services/
-    │   └── api.js                 # Axios instance with base URL + JWT
-    └── utils/
-        └── constants.js           # API URLs, roles, asset types
-```
-
-#### Frontend Animations & UX (Key Features)
-
-| Feature | Implementation |
-|---|---|
-| Page transitions | Framer Motion `AnimatePresence` with slide/fade |
-| Sidebar | Collapsible with smooth width transition, icon tooltips |
-| KPI counters | Count-up animation from 0 to value on mount |
-| Chart loading | Skeleton pulse → chart fade-in |
-| Map markers | Custom SVG markers with pulse animation for active faults |
-| Login page | Particle grid background with electric pulse effect |
-| Cards | Subtle border-glow on hover (#03FFAB at 20% opacity) |
-| Notifications | Slide-in toast with auto-dismiss |
-| Data tables | Row hover highlight, staggered row entrance |
-| Loading states | Custom "PowerPulse" spinner with rotating electricity icon |
-
-#### Design Token Mapping (Tailwind Config)
-
-```js
-// From design.md → tailwind.config.js
-colors: {
-  primary: '#03FFAB',      // Electric green
-  secondary: '#F8F5EC',    // Warm off-white
-  tertiary: '#8FE7C9',     // Soft mint
-  neutral: '#121212',      // Dark canvas
-  surface: '#0B0F0D',      // Deep black
-  'on-surface': '#F8F5EC', // Text on dark
-  error: '#FF6B6B',        // Alert red
-  border: '#374151',       // Cool border
-  'text-muted': '#B8B2A6', // Muted text
-  overlay: '#011210',      // Teal-black
-}
-fontFamily: {
-  syne: ['Syne', 'sans-serif'],
-  outfit: ['Outfit', 'sans-serif'],
-}
-```
-
----
-
-### 3. Python ML Service (`/ml-service`)
-
-#### [NEW] Skeleton Structure
-
-```
-ml-service/
-├── Dockerfile
-├── requirements.txt
-├── main.py                 # FastAPI app with health check
-├── models/
-│   └── predictor.py        # XGBoost model placeholder
-└── utils/
-    └── data_processor.py   # Pandas data pipeline
-```
-
-> [!NOTE]
-> The ML service in Phase 1 is a skeleton — it runs, has a health check, and returns mock predictions. Full ML training comes in Phase 3.
-
----
-
-### 4. Docker & Deployment (`/`)
-
-#### [NEW] Root-Level Files
-
-```
-TPCODL_Project/
-├── docker-compose.yml      # MySQL + Backend + Frontend + ML Service
-├── .env                    # Environment variables (DB password, JWT secret)
-├── .gitignore
-└── README.md               # Setup instructions
-```
-
-#### docker-compose Services
-
-| Service | Image | Port | Notes |
-|---|---|---|---|
-| `mysql-db` | mysql:8.0 | 3306 | Volume-mounted data |
-| `backend` | Custom (Maven) | 8080 | Depends on mysql-db |
-| `frontend` | Custom (Nginx) | 3000 | Nginx reverse proxy |
-| `ml-service` | Custom (Python) | 8000 | FastAPI |
+#### [MODIFY] [Sidebar.jsx](file:///d:/TPCODL_Project/frontend/src/components/layout/Sidebar.jsx)
+- Import `ClipboardList` (or `Package`) and `PowerOff` (or `ZapOff`) icons from `lucide-react`.
+- Append `Inventory` and `Outages` items to the `navItems` array with correct paths and allowed roles.
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-- `mvn clean compile` — Backend compiles without errors
-- `npm run build` — Frontend builds for production
-- `docker-compose config` — Validates compose file
+- Run `npm run build` inside the `frontend` folder to guarantee the new pages build without linting or compilation issues.
 
 ### Manual Verification
-- MySQL schema loads correctly with `schema.sql`
-- JWT login flow works end-to-end
-- Frontend renders the Dark Grid design with all animations
-- All entities have correct JPA mappings and relationships
-- Docker compose starts all 4 services cleanly
+- Deploy containers using `docker compose up --build -d` (once Docker is running on your machine).
+- Log in using default credentials (e.g., `admin@tpcodl.com` / `Admin@2026!`).
+- Navigate to the **Inventory** page, create a new item, edit it, and verify that the low-stock highlighting triggers correctly.
+- Navigate to the **Outages** page, report a new outage, verify its active display, and then resolve it.
 
----
 
-## Open Questions
 
-> [!IMPORTANT]
-> **MySQL Credentials**: I'll use `powerpulse_admin` / `TpCoDL@2026!` as defaults in `application.properties` and `.env`. Should I change these?
 
-> [!NOTE]
-> **TPCODL Zone Names**: I'll use real Odisha distribution zones (Bhubaneswar, Cuttack, Berhampur, Sambalpur, Rourkela, Balasore) plus your example "Moradabad Sector-5" in sample data. Confirm if you want Odisha-only or mixed.
+2. Run Python ML Service
+Open a terminal and navigate to the ml-service directory:
+powershell
+cd d:\TPCODL_Project\ml-service
+Install the Python dependencies:
+powershell
+pip install -r requirements.txt
+Start the FastAPI server:
+powershell
+uvicorn main:app --reload --port 8000
+The ML service will now be running on http://localhost:8000.
+3. Run Spring Boot Backend
+Because Maven is not globally installed in your command path, the easiest way to run the backend is via an IDE:
 
----
+Open the /backend folder in IntelliJ IDEA or VS Code (make sure you have the Extension Pack for Java installed).
+The IDE will automatically read the 
 
-## Scope Boundaries
+pom.xml
+ file and import all dependencies.
+Locate PowerPulseApplication.java (in src/main/java/com/tpcodl/powerpulse/) and click the Run button. Alternatively, if you prefer using the command line and install Maven:
+powershell
+cd d:\TPCODL_Project\backend
+mvn spring-boot:run
+The backend API will run on http://localhost:8080.
 
-Phase 1 delivers **structure + security + design**. The following are explicitly **NOT in Phase 1**:
-- REST API controllers and service layer logic (Phase 2)
-- ML model training and inference (Phase 3)
-- WebSocket real-time updates (Phase 4)
-- Production CI/CD pipeline
+4. Run React Frontend
+Open a new terminal and navigate to the frontend directory:
+powershell
+cd d:\TPCODL_Project\frontend
+Install dependencies (if you haven't already):
+powershell
+npm install
+Start the Vite development server:
+powershell
+npm run dev
+Click the link shown in your terminal (usually http://localhost:5173) to open the application in your browser.
+Credentials Reference
+Once all services are running, you can log in using these default credentials:
+
+Admin: admin@tpcodl.com / Admin@2026!
+Field Engineer: engineer@tpcodl.com / Engineer@2026!
+Maintenance Manager: manager@tpcodl.com / Manager@2026!
+Executive: executive@tpcodl.com / Executive@2026!
+1:57 PM
+3:19 PM
+The BadCredentialsException is occurring because your local database tables were created by Spring Boot's Hibernate auto-generation (ddl-auto=update), but the initial seed data (the user accounts themselves) was never loaded. Consequently, the users table is currently empty.
+
+What I Did to Fix It
+I created a programmatic data seeder class 
+
+DataSeeder.java
+ in your backend.
+
+On your next backend startup, it will check if the database is empty.
+If it is, it will automatically register all default user accounts (with correct BCrypt-encrypted passwords) as well as default assets, faults, outages, and inventory items.
+How to Resolve This Now
+Restart your Spring Boot Backend: Stop the currently running Spring Boot server in your IDE (or terminal) and start it up again.
+In your backend terminal logs, you will see confirmation lines like:
+text
+Seeded default user accounts successfully.
+Seeded grid assets successfully.
+...
+Open your browser and log in with the default credentials:
+Username/Email: admin@tpcodl.com
+Password: Admin@2026!
+What's Next?
+Once you confirm you can log in, let me know if you would like me to proceed with executing the 
+
+Implementation Plan
+ to build out the remaining Inventory Management and Outage Monitoring pages so the project is 100% complete!
+
+3:19 PM
